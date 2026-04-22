@@ -12,9 +12,11 @@ A intentionally buggy Flask user management API used as a test bed for Claude Co
 │   ├── models.py     # User model
 │   └── routes.py     # REST endpoints
 ├── hooks/
-│   ├── pre_tool.sh   # Logs PreToolUse events
-│   ├── post_tool.sh  # Logs PostToolUse events
-│   └── stop.sh       # Logs Stop events
+│   ├── pre_tool.sh        # Logs PreToolUse events
+│   ├── post_tool.sh       # Logs PostToolUse events
+│   ├── post_tool_syntax.sh # Syntax-checks edited .py files, blocks on error
+│   ├── block_prod_yaml.sh  # Blocks Read access to int.yaml and prod.yaml
+│   └── stop.sh            # Logs Stop events
 ├── k8s/
 │   ├── int/          # Kubernetes manifests for INT
 │   └── prod/         # Kubernetes manifests for PROD
@@ -78,7 +80,19 @@ curl -s -X DELETE http://localhost:5000/api/users/1
 
 ## Lifecycle hooks
 
-When Claude Code works in this directory, every tool call is logged to `lifecycle.log`:
+Hook scripts live in `hooks/` and are registered in `.claude/settings.json`:
+
+| Hook | Event | Matcher | Behaviour |
+|------|-------|---------|-----------|
+| `pre_tool.sh` | `PreToolUse` | `*` | Logs tool name and key input field to `lifecycle.log` |
+| `post_tool.sh` | `PostToolUse` | `*` | Logs ok/error status to `lifecycle.log` |
+| `post_tool_syntax.sh` | `PostToolUse` | `Write`, `Edit`, `MultiEdit` | Runs `py_compile` on edited `.py` files; blocks the tool result with an error message if a syntax error is found |
+| `block_prod_yaml.sh` | `PreToolUse` | `Read` | Blocks any attempt to read `int.yaml` or `prod.yaml`; logs the attempt to `blocked_reads.log` |
+| `stop.sh` | `Stop` | — | Logs the session ID to `lifecycle.log` |
+
+All logging hooks exit 0 (non-blocking). `block_prod_yaml.sh` exits 2 to block the read. `post_tool_syntax.sh` returns a JSON `{"decision": "block", ...}` payload to surface the error inline.
+
+Example `lifecycle.log` output:
 
 ```
 2026-04-21T10:00:01+00:00 [PreToolUse]  tool=Read file_path=app/routes.py
@@ -87,8 +101,6 @@ When Claude Code works in this directory, every tool call is logged to `lifecycl
 2026-04-21T10:00:02+00:00 [PostToolUse] tool=Edit status=ok
 2026-04-21T10:00:05+00:00 [Stop]        session=abc123...
 ```
-
-Hook scripts live in `hooks/` and are registered in `.claude/settings.json`.
 
 ## Deployment
 
