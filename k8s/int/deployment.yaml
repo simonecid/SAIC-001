@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-api
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-api
+  template:
+    metadata:
+      labels:
+        app: user-api
+    spec:
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: user-api
+          image: localhost/user-api:latest
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 100m
+            limits:
+              memory: 128Mi
+              cpu: 100m
+          ports:
+            - containerPort: 5000
+          env:
+            - name: ENV
+              value: int
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-api
+  namespace: default
+spec:
+  selector:
+    app: user-api
+  ports:
+    - port: 80
+      targetPort: 5000
+  type: ClusterIP
